@@ -4,10 +4,12 @@
 /* Classes */
 const Game = require('./game');
 const Vector = require('./vector');
+const BulletPool = require('./bullet_pool');
 
 /* Global variables */
 var canvas = document.getElementById('screen');
 var game = new Game(canvas, update, render);
+var bullets = new BulletPool(10);
 var player = {
   angle: 0,
   position: {x: 200, y: 200},
@@ -59,6 +61,7 @@ window.onmousedown = function(event) {
   event.preventDefault();
   reticule.x = event.offsetX;
   reticule.y = event.offsetY;
+  bullets.add(player.position, {x:1, y:0});
   // TODO: Fire bullet in direction of the retciule
 }
 
@@ -90,12 +93,12 @@ window.onkeydown = function(event) {
       event.preventDefault();
       break;
     case "ArrowLeft":
-    case "d":
+    case "a":
       input.left = true;
       event.preventDefault();
       break;
     case "ArrowRight":
-    case "a":
+    case "d":
       input.right = true;
       event.preventDefault();
       break;
@@ -185,6 +188,8 @@ function update(elapsedTime) {
 
   if(camera.x < 0) camera.x = 0;
 
+  bullets.update(elapsedTime, function(){return false});
+
 }
 
 /**
@@ -211,6 +216,8 @@ function render(elapsedTime, ctx) {
   ctx.drawImage(backgrounds[0], 0, 0);
   ctx.restore();
 
+  bullets.render(elapsedTime, ctx);
+
   // Render the player
   ctx.save();
   ctx.translate(player.position.x - camera.x, player.position.y);
@@ -232,7 +239,60 @@ function render(elapsedTime, ctx) {
   ctx.restore();
 }
 
-},{"./game":2,"./vector":3}],2:[function(require,module,exports){
+},{"./bullet_pool":2,"./game":3,"./vector":4}],2:[function(require,module,exports){
+module.export = exports = BulletPool;
+
+function BulletPool(maxSize){
+  this.pool = new Float32Array(maxSize * 4);
+  this.end = 0;
+  this.maxSize = maxSize;
+}
+
+BulletPool.prototype.add = function(position, velocity) {
+
+  if(this.end >= this.max) return;
+
+  this.pool[this.end * 4] = position.x;
+  this.pool[this.end * 4 + 1] = position.y;
+  this.pool[this.end * 4 + 2] = velocity.x;
+  this.pool[this.end * 4 + 3] = velocity.y;
+
+  this.end++;
+};
+
+BulletPool.prototype.update = function(elapsedTime, callback){
+  for(var i = 0; i < this.end; i++){
+    this.pool[4 * i] += this.pool[4 * i + 2];
+    this.pool[4 * i + 1] += this.pool[4 * i + 3];
+
+    if(callback({
+      x: this.pool[4*i],
+      y: this.pool[4*i + 1]
+    })){
+      this.pool[4 * i] = this.pool[4*(this.end - 1)];
+      this.pool[4 * i + 1] = this.pool[4*(this.end - 1) + 1];
+      this.pool[4 * i + 2] = this.pool[4*(this.end - 1) + 2];
+      this.pool[4 * i + 3] = this.pool[4*(this.end - 1) + 3];
+      this.end--;
+      // process the i that we just copied
+      i--;
+    }
+  }
+}
+
+BulletPool.prototype.render = function(elapsedTime, ctx){
+  ctx.save();
+  ctx.beginPath();
+  ctx.fillStyle = "black";
+  for(var i = 0; i < this.end; i++){
+    ctx.moveTo(this.pool[4*i], this.pool[4*i+1]);
+    ctx.arc(this.pool[4*1], this.pool[4*i+1], 2, 0, 2*Math.PI);
+  }
+  ctx.fill();
+  ctx.restore();
+}
+
+},{}],3:[function(require,module,exports){
 "use strict";
 
 /**
@@ -290,7 +350,7 @@ Game.prototype.loop = function(newTime) {
   this.frontCtx.drawImage(this.backBuffer, 0, 0);
 }
 
-},{}],3:[function(require,module,exports){
+},{}],4:[function(require,module,exports){
 /**
  * @module Vector
  * A library of vector functions.
